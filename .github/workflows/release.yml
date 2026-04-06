@@ -1,0 +1,115 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            artifact: zapp-linux-x86_64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            artifact: zapp-linux-aarch64
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            artifact: zapp-windows-x86_64
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+            artifact: zapp-windows-aarch64
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            artifact: zapp-macos-x86_64
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            artifact: zapp-macos-aarch64
+          - target: universal-apple-darwin
+            os: macos-latest
+            artifact: zapp-macos-universal
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        if: matrix.target != 'universal-apple-darwin'
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Install Rust toolchain (macOS universal)
+        if: matrix.target == 'universal-apple-darwin'
+        run: |
+          rustup target add x86_64-apple-darwin
+          rustup target add aarch64-apple-darwin
+
+      - name: Install cross-compilation tools
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+
+      - name: Build
+        if: matrix.target != 'universal-apple-darwin'
+        run: cargo build --release --target ${{ matrix.target }} -p zapp
+
+      - name: Build (macOS universal)
+        if: matrix.target == 'universal-apple-darwin'
+        run: |
+          cargo build --release --target x86_64-apple-darwin -p zapp
+          cargo build --release --target aarch64-apple-darwin -p zapp
+          lipo -create \
+            target/x86_64-apple-darwin/release/zapp \
+            target/aarch64-apple-darwin/release/zapp \
+            -output zapp
+
+      - name: Package (unix)
+        if: runner.os != 'Windows' && matrix.target != 'universal-apple-darwin'
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czf ../../../${{ matrix.artifact }}.tar.gz zapp
+          cd ../../..
+
+      - name: Package (macOS universal)
+        if: matrix.target == 'universal-apple-darwin'
+        run: tar czf ${{ matrix.artifact }}.tar.gz zapp
+
+      - name: Package (windows)
+        if: runner.os == 'Windows'
+        run: Compress-Archive -Path target/${{ matrix.target }}/release/zapp.exe -DestinationPath ${{ matrix.artifact }}.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}.*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: artifacts/*
