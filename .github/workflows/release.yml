@@ -69,10 +69,11 @@ jobs:
         run: |
           cargo build --release --target x86_64-apple-darwin -p zapp
           cargo build --release --target aarch64-apple-darwin -p zapp
+          mkdir -p target/universal
           lipo -create \
             target/x86_64-apple-darwin/release/zapp \
             target/aarch64-apple-darwin/release/zapp \
-            -output zapp
+            -output target/universal/zapp
 
       - name: Package (unix)
         if: runner.os != 'Windows' && matrix.target != 'universal-apple-darwin'
@@ -83,7 +84,7 @@ jobs:
 
       - name: Package (macOS universal)
         if: matrix.target == 'universal-apple-darwin'
-        run: tar czf ${{ matrix.artifact }}.tar.gz zapp
+        run: tar czf ${{ matrix.artifact }}.tar.gz -C target/universal zapp
 
       - name: Package (windows)
         if: runner.os == 'Windows'
