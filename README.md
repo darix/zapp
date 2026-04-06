@@ -6,7 +6,7 @@ A cross-platform CLI tool for flashing [ZSA](https://www.zsa.io) keyboards.
 
 - Voyager
 - Moonlander MK1 (rev A and rev B)
-- Ergodox EZ (including Original, Shine, and Glow variants)
+- Ergodox EZ STM32/Teensy (including Original, Shine, and Glow variants)
 - Halfmoon
 - Planck EZ (including Standard and Glow variants)
 
