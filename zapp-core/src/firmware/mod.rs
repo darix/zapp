@@ -44,18 +44,23 @@ pub fn load_firmware(path: &Path) -> Result<Firmware, ZappError> {
         source: e,
     })?;
 
+    load_firmware_from_bytes(&file_data)
+}
+
+/// Parse firmware from raw bytes, auto-detecting format.
+pub fn load_firmware_from_bytes(file_data: &[u8]) -> Result<Firmware, ZappError> {
     if file_data.is_empty() {
         return Err(ZappError::InvalidFirmware("file is empty".into()));
     }
 
     // Intel HEX starts with ':'
     if file_data[0] == b':' {
-        let data = ihex::parse_ihex(&file_data)?;
+        let data = ihex::parse_ihex(file_data)?;
         return Ok(Firmware::IntelHex { data });
     }
 
     // Try DFU binary
-    let suffixes = dfu_bin::find_dfu_suffixes(&file_data);
+    let suffixes = dfu_bin::find_dfu_suffixes(file_data);
 
     if suffixes.is_empty() {
         return Err(ZappError::InvalidFirmware(

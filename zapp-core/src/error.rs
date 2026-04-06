@@ -20,6 +20,12 @@ pub enum ZappError {
     #[error("Timeout waiting for bootloader")]
     Timeout,
 
+    #[error("No ZSA keyboard found")]
+    NoKeyboardFound,
+
+    #[error("Network error: {0}")]
+    Network(String),
+
     #[error("IO error reading {path}: {source}")]
     Io {
         path: PathBuf,

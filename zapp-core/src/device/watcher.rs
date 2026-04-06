@@ -4,8 +4,33 @@ use futures_lite::StreamExt;
 use nusb::hotplug::HotplugEvent;
 use nusb::MaybeFuture;
 
-use super::ids::{identify_bootloader, keyboard_for_bootloader, BootloaderDevice, BootloaderKind, Keyboard};
+use super::ids::{identify_bootloader, identify_keyboard, keyboard_for_bootloader, BootloaderDevice, BootloaderKind, Keyboard};
 use crate::ZappError;
+
+/// A ZSA keyboard detected in normal (non-bootloader) mode.
+pub struct ConnectedKeyboard {
+    pub keyboard: Keyboard,
+    pub serial: String,
+    pub pid: u16,
+}
+
+/// Scan USB for the first ZSA keyboard in normal mode.
+pub fn find_keyboard() -> Result<ConnectedKeyboard, ZappError> {
+    for dev_info in nusb::list_devices().wait()? {
+        let vid = dev_info.vendor_id();
+        let pid = dev_info.product_id();
+
+        if let Some(keyboard) = identify_keyboard(vid, pid) {
+            let serial = dev_info.serial_number().unwrap_or_default().to_string();
+            return Ok(ConnectedKeyboard {
+                keyboard,
+                serial,
+                pid,
+            });
+        }
+    }
+    Err(ZappError::NoKeyboardFound)
+}
 
 /// Status updates from the bootloader watcher.
 #[derive(Debug, Clone)]

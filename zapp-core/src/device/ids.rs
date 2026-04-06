@@ -93,6 +93,26 @@ pub fn friendly_name(vid: u16, pid: u16) -> &'static str {
     }
 }
 
+/// Identify a keyboard from its normal-mode VID/PID.
+/// Returns `None` if not a known ZSA keyboard.
+pub fn identify_keyboard(vid: u16, pid: u16) -> Option<Keyboard> {
+    if vid != ZSA_VID {
+        return None;
+    }
+    match pid {
+        0x1307 | 0x4974 | 0x4975 | 0x4976 | 0x2010 | 0x2020 | 0x2030 => Some(Keyboard::ErgodoxEz),
+        0x6060 | 0xC6CE | 0xC6CF => Some(Keyboard::PlanckEz),
+        0x1969 | 0x1972 => Some(Keyboard::Moonlander),
+        0x1977 | 0x1978 => Some(Keyboard::Voyager),
+        _ => None,
+    }
+}
+
+/// Returns true if the PID corresponds to a Moonlander rev B.
+pub fn is_moonlander_revb(pid: u16) -> bool {
+    pid == 0x1972
+}
+
 /// Human-readable target name from a firmware PID (the PID embedded in the DFU suffix).
 /// These are the normal-mode PIDs that identify which keyboard the firmware is built for.
 pub fn target_name_for_pid(pid: u16) -> &'static str {
