@@ -99,4 +99,4 @@ udev/           Linux udev rules
 
 ## License
 
-Copyright ZSA Technology Labs, Inc.
+Copyright ZSA Technology Labs, Inc. See [LICENSE.md](LICENSE.md) for details.
