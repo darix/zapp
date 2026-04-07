@@ -14,6 +14,12 @@ pub enum ZappError {
     #[error("Invalid firmware: {0}")]
     InvalidFirmware(String),
 
+    #[error("Incompatible firmware: {firmware_desc} cannot be flashed on {device_desc}")]
+    IncompatibleFirmware {
+        firmware_desc: String,
+        device_desc: String,
+    },
+
     #[error("Unsupported device: VID={vid:#06x} PID={pid:#06x}")]
     UnsupportedDevice { vid: u16, pid: u16 },
 
