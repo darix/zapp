@@ -53,40 +53,71 @@ fn validate_firmware_compatibility(
     );
 
     match firmware {
-        Firmware::IgnitionDual { .. } => {
-            // Dual-image firmware is only valid for Ignition bootloaders.
-            if !is_ignition {
+        Firmware::IgnitionDual { primary, alternate } => {
+            // A dual-image firmware contains two images (e.g. Moonlander revA + revB).
+            // The device's bootloader PID must match one of them so the correct image
+            // is selected in flash_dfu. Reject if neither image matches.
+            if device.pid != primary.pid && device.pid != alternate.pid {
                 return Err(ZappError::IncompatibleFirmware {
-                    firmware_desc: "Ignition dual-image firmware".into(),
+                    firmware_desc: format!(
+                        "dual-image firmware ({} + {})",
+                        ids::target_name_for_pid(primary.pid),
+                        ids::target_name_for_pid(alternate.pid),
+                    ),
                     device_desc: ids::friendly_name(device.vid, device.pid).into(),
                 });
             }
         }
         Firmware::DfuBinary { vid, pid, .. } => {
-            if is_ignition && *vid == ids::STM32_VID && *pid == ids::STM32_DFU_PID {
-                // Generic STM32 DFU firmware being flashed on an Ignition bootloader.
-                // The firmware is linked for 0x0800_0000 but Ignition starts at 0x0800_2000.
+            // Determine which bootloader protocol the firmware expects based on
+            // the VID/PID embedded in its DFU suffix.
+            let fw_bootloader = ids::identify_bootloader(*vid, *pid);
+            let fw_is_ignition = matches!(
+                fw_bootloader,
+                Some(BootloaderKind::IgnitionStm32 | BootloaderKind::IgnitionGd32)
+            );
+            let fw_is_stm32_dfu = matches!(fw_bootloader, Some(BootloaderKind::Stm32Dfu));
+
+            if fw_is_stm32_dfu && is_ignition {
+                // STM32 DFU firmware (linked at 0x0800_0000) on Ignition device (0x0800_2000).
                 return Err(ZappError::IncompatibleFirmware {
-                    firmware_desc: "STM32 DFU firmware".into(),
+                    firmware_desc: format!(
+                        "{} firmware (STM32 DFU)",
+                        ids::target_name_for_pid(*pid)
+                    ),
                     device_desc: ids::friendly_name(device.vid, device.pid).into(),
                 });
             }
 
-            // Check for Moonlander cross-revision mismatch using normal-mode PIDs.
-            let fw_keyboard = ids::identify_keyboard(*vid, *pid);
-            if fw_keyboard == Some(Keyboard::Moonlander) {
-                let fw_is_revb = ids::is_moonlander_revb(*pid);
-                if fw_is_revb && !is_ignition {
-                    return Err(ZappError::IncompatibleFirmware {
-                        firmware_desc: "Moonlander rev B (Ignition) firmware".into(),
-                        device_desc: ids::friendly_name(device.vid, device.pid).into(),
-                    });
-                }
-                if !fw_is_revb && is_ignition {
-                    return Err(ZappError::IncompatibleFirmware {
-                        firmware_desc: "Moonlander rev A (STM32 DFU) firmware".into(),
-                        device_desc: ids::friendly_name(device.vid, device.pid).into(),
-                    });
+            if fw_is_ignition && !is_ignition {
+                // Ignition firmware (linked at 0x0800_2000) on STM32 DFU device (0x0800_0000).
+                return Err(ZappError::IncompatibleFirmware {
+                    firmware_desc: format!(
+                        "{} firmware (Ignition)",
+                        ids::target_name_for_pid(*pid)
+                    ),
+                    device_desc: ids::friendly_name(device.vid, device.pid).into(),
+                });
+            }
+
+            // Also check normal-mode PIDs for Moonlander cross-revision mismatch,
+            // in case the firmware suffix uses the keyboard PID rather than bootloader PID.
+            if *vid == ids::ZSA_VID {
+                let fw_keyboard = ids::identify_keyboard(*vid, *pid);
+                if fw_keyboard == Some(Keyboard::Moonlander) {
+                    let fw_is_revb = ids::is_moonlander_revb(*pid);
+                    if fw_is_revb && !is_ignition {
+                        return Err(ZappError::IncompatibleFirmware {
+                            firmware_desc: "Moonlander rev B (Ignition) firmware".into(),
+                            device_desc: ids::friendly_name(device.vid, device.pid).into(),
+                        });
+                    }
+                    if !fw_is_revb && is_ignition {
+                        return Err(ZappError::IncompatibleFirmware {
+                            firmware_desc: "Moonlander rev A (STM32 DFU) firmware".into(),
+                            device_desc: ids::friendly_name(device.vid, device.pid).into(),
+                        });
+                    }
                 }
             }
         }
